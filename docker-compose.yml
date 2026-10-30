@@ -1,0 +1,91 @@
+# Ambiente de DESENVOLVIMENTO LOCAL. Não use em produção.
+services:
+    wordpress:
+        image: wordpress:php8.3-apache
+        container_name: ${COMPOSE_PROJECT_NAME}_wordpress
+        restart: unless-stopped
+        ports:
+            - "127.0.0.1:${PROJECT_WEB_PORT}:80"
+        environment:
+            WORDPRESS_DB_HOST: database:3306
+            WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
+            WORDPRESS_DB_USER: ${MYSQL_USER}
+            WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
+            WORDPRESS_DEBUG: ${WORDPRESS_DEBUG:-0}
+        volumes:
+            - ./wordpress:/var/www/html
+            - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
+        depends_on:
+            database:
+                condition: service_healthy
+
+    database:
+        image: mysql:8.4
+        container_name: ${COMPOSE_PROJECT_NAME}_database
+        restart: unless-stopped
+        environment:
+            MYSQL_DATABASE: ${MYSQL_DATABASE}
+            MYSQL_USER: ${MYSQL_USER}
+            MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+        volumes:
+            - database_data:/var/lib/mysql
+        healthcheck:
+            # 127.0.0.1 força conexão TCP: assim o healthcheck só passa quando o
+            # MySQL terminou de inicializar (o servidor temporário da primeira
+            # inicialização não aceita TCP).
+            test: ["CMD-SHELL", 'mysqladmin ping -h 127.0.0.1 -u root -p"$$MYSQL_ROOT_PASSWORD" --silent']
+            start_period: 30s
+            interval: 5s
+            timeout: 5s
+            retries: 20
+
+    phpmyadmin:
+        image: phpmyadmin:latest
+        container_name: ${COMPOSE_PROJECT_NAME}_phpmyadmin
+        restart: unless-stopped
+        ports:
+            - "127.0.0.1:${PROJECT_PMA_PORT}:80"
+        environment:
+            PMA_HOST: database
+            UPLOAD_LIMIT: 256M
+        depends_on:
+            database:
+                condition: service_healthy
+
+    wpcli:
+        build:
+            context: .
+            dockerfile: Dockerfile.wpcli
+        profiles: ["tools"]
+        working_dir: /var/www/html
+        user: "33:33"
+        volumes:
+            - ./wordpress:/var/www/html
+            - ./setup.sh:/scripts/setup.sh:ro
+        environment:
+            HOME: /tmp
+            WORDPRESS_DB_HOST: database:3306
+            WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
+            WORDPRESS_DB_USER: ${MYSQL_USER}
+            WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
+            # Usadas pelo setup.sh
+            WP_URL: http://localhost:${PROJECT_WEB_PORT}
+            WP_TITLE: ${WP_TITLE:-}
+            WP_TAGLINE: ${WP_TAGLINE:-}
+            WP_ADMIN_USER: ${WP_ADMIN_USER:-}
+            WP_ADMIN_PASSWORD: ${WP_ADMIN_PASSWORD:-}
+            WP_ADMIN_EMAIL: ${WP_ADMIN_EMAIL:-}
+            WP_LOCALE: ${WP_LOCALE:-}
+            WP_TIMEZONE: ${WP_TIMEZONE:-}
+            WP_THEME: ${WP_THEME:-}
+            WP_PLUGINS: ${WP_PLUGINS:-}
+            WP_PAGES: ${WP_PAGES:-}
+        depends_on:
+            database:
+                condition: service_healthy
+            wordpress:
+                condition: service_started
+
+volumes:
+    database_data:

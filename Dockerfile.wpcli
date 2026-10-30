@@ -1,0 +1,8 @@
+FROM wordpress:cli-php8.3
+
+# Plugin de autenticação que o cliente MariaDB da imagem precisa
+# para conectar no MySQL 8 (caching_sha2_password) nos comandos `wp db`.
+USER root
+RUN apk add --no-cache mariadb-connector-c
+
+USER www-data

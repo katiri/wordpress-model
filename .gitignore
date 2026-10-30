@@ -1,0 +1,9 @@
+# Configuração local de cada site
+.env
+
+# Arquivos do WordPress (gerados pelo container)
+wordpress/
+
+# Backups do banco
+*.sql
+*.sql.gz
